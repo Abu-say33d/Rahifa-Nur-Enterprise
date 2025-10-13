@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Agent Admin - NUR ENTERPRISE</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <h1 class="brand">NUR ENTERPRISE</h1>
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="requirements.html">Requirements</a>
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container admin-page">
+    <h2>Agent Login (Demo)</h2>
+    <p>Use Firebase Auth in production. This demo shows a simple email/password form.</p>
+
+    <div class="card small">
+      <h3>Sign in</h3>
+      <input id="email" type="email" placeholder="agent@example.com" />
+      <input id="password" type="password" placeholder="password" />
+      <button class="btn primary" onclick="signIn()">Sign In</button>
+      <button class="btn" onclick="signOut()">Sign Out</button>
+    </div>
+
+    <div class="card small">
+      <h3>Post Requirement</h3>
+      <input id="jobTitle" placeholder="Job Title (e.g., Electrician)" />
+      <input id="jobLocation" placeholder="Location (e.g., City, Area)" />
+      <textarea id="jobDesc" placeholder="Short description"></textarea>
+      <input id="jobContact" placeholder="Contact phone / WhatsApp" />
+      <input id="jobImage" type="text" placeholder="Image URL (optional)" />
+      <button class="btn primary" onclick="postJob()">Post Requirement</button>
+    </div>
+
+    <div id="adminNotice" class="hint">This demo uses local sample posts. Connect Firebase and update assets/js/app.js to enable live posting.</div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>&copy; <span id="year5"></span> NUR ENTERPRISE</p>
+    </div>
+  </footer>
+
+  <script src="assets/js/app.js"></script>
+  <script>document.getElementById('year5').textContent = new Date().getFullYear();</script>
+</body>
+</html>
