@@ -1,0 +1,830 @@
+import React, { useState, useEffect } from 'react';
+import { Briefcase, MapPin, DollarSign, User, Award, FileText, Send, Building, Phone, Mail, Globe, LogIn, PlusCircle, Trash2, Edit } from 'lucide-react';
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, getDocs, addDoc, doc, deleteDoc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, signInAnonymously } from "firebase/auth";
+
+// --- Firebase Configuration ---
+// IMPORTANT: Paste your actual Firebase project configuration here
+const firebaseConfig = {
+  apiKey: "AIzaSyCFqwX_u01ayPbFQIqr1rz1vWaQYFzy09c",
+  authDomain: "nur-enterprise-32e2a.firebaseapp.com",
+  projectId: "nur-enterprise-32e2a",
+  storageBucket: "nur-enterprise-32e2a.firebasestorage.app",
+  messagingSenderId: "755074901837",
+  appId: "1:755074901837:web:982ad9bbad7a2d712c3904",
+  measurementId: "G-N5LQ9ZGWP7"
+};
+
+// --- Initialize Firebase ---
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+const auth = getAuth(app);
+
+
+// --- Reusable Components ---
+
+const LoadingScreen = () => (
+    <div className="flex items-center justify-center h-screen bg-gray-100">
+        <div className="text-center">
+            <div className="w-16 h-16 border-4 border-blue-500 border-dashed rounded-full animate-spin mx-auto"></div>
+            <h2 className="mt-4 text-xl font-semibold text-gray-700">Loading Your Website...</h2>
+            <p className="text-gray-500">Connecting to the database and fetching content.</p>
+        </div>
+    </div>
+);
+
+const ErrorScreen = ({ message }) => (
+    <div className="flex items-center justify-center h-screen bg-red-50">
+         <div className="text-center p-8 bg-white rounded-lg shadow-lg max-w-lg mx-auto">
+            <h2 className="text-2xl font-bold text-red-600">An Error Occurred</h2>
+            <p className="mt-2 text-gray-600">{message}</p>
+        </div>
+    </div>
+);
+
+const Header = ({ navigate, user, siteContent }) => (
+    <header className="bg-white shadow-md sticky top-0 z-50">
+        <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
+            <div className="text-2xl font-bold text-blue-800 cursor-pointer" onClick={() => navigate('home')}>
+                {siteContent.companyName || "Global Careers"}
+            </div>
+            <div className="hidden md:flex items-center space-x-6">
+                <a onClick={() => navigate('home')} className="text-gray-600 hover:text-blue-800 cursor-pointer">Home</a>
+                <a onClick={() => navigate('about')} className="text-gray-600 hover:text-blue-800 cursor-pointer">About Us</a>
+                <a onClick={() => navigate('services')} className="text-gray-600 hover:text-blue-800 cursor-pointer">Services</a>
+                <a onClick={() => navigate('jobs')} className="text-gray-600 hover:text-blue-800 cursor-pointer">Job Openings</a>
+                <a onClick={() => navigate('testimonials')} className="text-gray-600 hover:text-blue-800 cursor-pointer">Testimonials</a>
+                <a onClick={() => navigate('contact')} className="text-gray-600 hover:text-blue-800 cursor-pointer">Contact</a>
+                 {user && <a onClick={() => navigate('admin')} className="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer">Admin Dashboard</a>}
+            </div>
+            <div className="flex items-center space-x-4">
+                <button onClick={() => navigate('apply')} className="hidden md:block bg-gold-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gold-600 transition duration-300">
+                    Apply Now
+                </button>
+                 {!user && (
+                    <button onClick={() => navigate('login')} className="bg-gray-200 text-gray-700 p-2 rounded-full hover:bg-gray-300">
+                        <LogIn size={20} />
+                    </button>
+                )}
+            </div>
+        </nav>
+    </header>
+);
+
+const Footer = ({ siteContent }) => (
+    <footer className="bg-blue-900 text-white">
+        <div className="container mx-auto px-6 py-10">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div>
+                    <h3 className="text-xl font-bold mb-4">{siteContent.companyName || "Global Careers"}</h3>
+                    <p className="text-blue-200">{siteContent.footer_description || "Connecting talented workers with world-class opportunities abroad. Your future starts here."}</p>
+                </div>
+                <div>
+                    <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+                    <ul className="space-y-2">
+                        <li><a href="#" className="hover:text-gold-400">About Us</a></li>
+                        <li><a href="#" className="hover:text-gold-400">Job Openings</a></li>
+                        <li><a href="#" className="hover:text-gold-400">Services</a></li>
+                        <li><a href="#" className="hover:text-gold-400">Contact Us</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 className="text-lg font-semibold mb-4">Contact Info</h3>
+                    <div className="space-y-2 text-blue-200">
+                       <p className="flex items-center"><MapPin className="w-4 h-4 mr-2 text-gold-400" /> {siteContent.contact_address || "123 Career Street, New Delhi, India"}</p>
+                       <p className="flex items-center"><Phone className="w-4 h-4 mr-2 text-gold-400" /> {siteContent.contact_phone || "+91 12345 67890"}</p>
+                       <p className="flex items-center"><Mail className="w-4 h-4 mr-2 text-gold-400" /> {siteContent.contact_email || "contact@globalcareers.com"}</p>
+                    </div>
+                </div>
+                <div>
+                    <h3 className="text-lg font-semibold mb-4">Follow Us</h3>
+                    {/* Social Media Icons would go here */}
+                </div>
+            </div>
+        </div>
+        <div className="bg-blue-950 text-center py-4 text-sm text-blue-300">
+            <p>&copy; {new Date().getFullYear()} {siteContent.companyName || "Global Careers"}. All Rights Reserved.</p>
+        </div>
+    </footer>
+);
+
+const JobCard = ({ job, navigate }) => (
+    <div className="bg-white rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-2 transition-transform duration-300">
+        <div className="p-6">
+            <div className="flex items-center mb-2">
+                <Briefcase className="w-5 h-5 text-blue-700 mr-2" />
+                <h3 className="text-xl font-bold text-gray-800">{job.title}</h3>
+            </div>
+            <div className="flex items-center text-gray-600 mb-4">
+                <MapPin className="w-5 h-5 text-blue-500 mr-2" />
+                <span>{job.country}</span>
+            </div>
+            <p className="text-gray-700 mb-4 h-20 overflow-hidden">{job.description}</p>
+            <div className="flex justify-between items-center">
+                <div className="flex items-center text-green-600 font-semibold">
+                    <DollarSign className="w-5 h-5 mr-1" />
+                    <span>{job.salary}</span>
+                </div>
+                <button onClick={() => navigate('apply', { jobTitle: job.title })} className="bg-blue-800 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-900 transition duration-300">
+                    Apply Now
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
+// --- Page Components ---
+const HomePage = ({ navigate, jobs, siteContent }) => (
+    <div>
+        <section className="bg-blue-800 text-white py-20 md:py-32" style={{backgroundImage: 'url(https://placehold.co/1920x1080/0d3d6b/ffffff?text=Your+Future+Awaits)'}}>
+            <div className="container mx-auto px-6 text-center bg-black bg-opacity-30 p-10 rounded-lg">
+                <h1 className="text-4xl md:text-6xl font-extrabold leading-tight mb-4">{siteContent.home_headline || "Find Your Dream Job Abroad"}</h1>
+                <p className="text-lg md:text-xl text-blue-200 mb-8">{siteContent.home_subheadline || "We connect skilled professionals with exciting career opportunities across the globe."}</p>
+                <div className="space-x-4">
+                    <button onClick={() => navigate('jobs')} className="bg-gold-500 text-white font-bold py-3 px-8 rounded-lg text-lg hover:bg-gold-600 transition duration-300">View Jobs</button>
+                    <button onClick={() => navigate('apply')} className="bg-white text-blue-800 font-bold py-3 px-8 rounded-lg text-lg hover:bg-gray-200 transition duration-300">Apply Now</button>
+                </div>
+            </div>
+        </section>
+
+        <section className="py-20 bg-gray-50">
+            <div className="container mx-auto px-6">
+                <h2 className="text-3xl font-bold text-center text-gray-800 mb-2">Featured Job Openings</h2>
+                <p className="text-center text-gray-600 mb-12">Here are some of the most recent and popular opportunities available.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {jobs.slice(0, 3).map(job => <JobCard key={job.id} job={job} navigate={navigate} />)}
+                </div>
+                <div className="text-center mt-12">
+                    <button onClick={() => navigate('jobs')} className="bg-blue-800 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-900 transition duration-300">View All Jobs</button>
+                </div>
+            </div>
+        </section>
+        
+        <section className="py-20">
+             <div className="container mx-auto px-6">
+                <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">{siteContent.home_why_title || "Why Choose Global Careers?"}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-10 text-center">
+                    <div className="p-6">
+                        <Award className="w-16 h-16 text-gold-500 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold mb-2">{siteContent.home_why_1_title || "Expert Guidance"}</h3>
+                        <p className="text-gray-600">{siteContent.home_why_1_desc || "Our experienced team guides you through every step of the process, from application to visa approval."}</p>
+                    </div>
+                     <div className="p-6">
+                        <Globe className="w-16 h-16 text-gold-500 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold mb-2">{siteContent.home_why_2_title || "Global Network"}</h3>
+                        <p className="text-gray-600">{siteContent.home_why_2_desc || "We have strong partnerships with leading companies in many countries, offering you exclusive opportunities."}</p>
+                    </div>
+                     <div className="p-6">
+                        <FileText className="w-16 h-16 text-gold-500 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold mb-2">{siteContent.home_why_3_title || "Transparent Process"}</h3>
+                        <p className="text-gray-600">{siteContent.home_why_3_desc || "We believe in complete transparency. You will be informed and in control at every stage of your journey."}</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+);
+
+const AboutUsPage = ({ siteContent }) => ( <div className="py-20 bg-gray-50">
+        <div className="container mx-auto px-6">
+            <div className="text-center mb-16">
+                <h1 className="text-4xl font-bold text-blue-900">{siteContent.about_title || "About Global Careers"}</h1>
+                <p className="text-lg text-gray-600 mt-2">{siteContent.about_subtitle || "Your Trusted Partner in Building a Global Career"}</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                <div>
+                     <img src="https://placehold.co/600x400/3b82f6/ffffff?text=Our+Team" alt="Our Team" className="rounded-lg shadow-xl"/>
+                </div>
+                <div>
+                    <h2 className="text-2xl font-semibold text-blue-800 mb-4">Our Mission</h2>
+                    <p className="text-gray-700 mb-4">{siteContent.about_mission || "Our mission is to bridge the gap between talented professionals and the global demand for their skills. We are committed to providing ethical, transparent, and comprehensive recruitment services that empower individuals to achieve their career aspirations on an international scale."}</p>
+                    <h2 className="text-2xl font-semibold text-blue-800 mb-4">Our Vision</h2>
+                    <p className="text-gray-700">{siteContent.about_vision || "We envision a world where geographical boundaries do not limit professional growth. We strive to be the most trusted and sought-after overseas employment agency, known for our integrity, professionalism, and the success stories of our candidates."}</p>
+                </div>
+            </div>
+        </div>
+    </div>);
+
+const ServicesPage = () => {
+    // This content is fairly static, leaving it hard-coded for now but could be moved to Firestore too.
+    const services = [
+        { icon: <Briefcase/>, title: "Job Placement", description: "Matching your skills and experience with the right job in the right country." },
+        { icon: <FileText/>, title: "Visa Assistance", description: "Expert guidance and complete support for all visa application and processing formalities." },
+        { icon: <Building/>, title: "Medical Check-ups", description: "Arranging and coordinating mandatory medical examinations with authorized centers." },
+        { icon: <Send/>, title: "Ticketing & Travel", description: "Hassle-free flight booking and travel arrangements to your destination country." },
+        { icon: <Award/>, title: "Pre-Departure Training", description: "Essential orientation and training to help you adapt to a new work environment and culture." },
+        { icon: <User/>, title: "Documentation Support", description: "Assistance with attestation, verification, and all other necessary paperwork." }
+    ];
+
+    return (
+    <div className="py-20 bg-white">
+        <div className="container mx-auto px-6">
+            <div className="text-center mb-16">
+                <h1 className="text-4xl font-bold text-blue-900">Our Services</h1>
+                <p className="text-lg text-gray-600 mt-2">We provide a comprehensive range of services to ensure a smooth transition.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {services.map((service, index) => (
+                    <div key={index} className="bg-gray-50 p-8 rounded-lg shadow-md text-center hover:shadow-xl hover:bg-blue-50 transition-all duration-300">
+                        <div className="text-blue-800 w-16 h-16 mx-auto mb-4 flex items-center justify-center">{React.cloneElement(service.icon, { className: 'w-10 h-10' })}</div>
+                        <h3 className="text-2xl font-semibold text-gray-800 mb-3">{service.title}</h3>
+                        <p className="text-gray-600">{service.description}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+    );
+};
+
+const JobsPage = ({ navigate, jobs, allJobs }) => {
+    const [filteredJobs, setFilteredJobs] = useState(jobs);
+    const [countryFilter, setCountryFilter] = useState('');
+    const [typeFilter, setTypeFilter] = useState('');
+
+    const countries = [...new Set(allJobs.map(job => job.country))];
+    const types = [...new Set(allJobs.map(job => job.type))];
+
+    useEffect(() => {
+        let newFilteredJobs = allJobs;
+        if (countryFilter) {
+            newFilteredJobs = newFilteredJobs.filter(job => job.country === countryFilter);
+        }
+        if (typeFilter) {
+            newFilteredJobs = newFilteredJobs.filter(job => job.type === typeFilter);
+        }
+        setFilteredJobs(newFilteredJobs);
+    }, [countryFilter, typeFilter, allJobs]);
+    
+    return (
+        <div className="py-20 bg-gray-50">
+            <div className="container mx-auto px-6">
+                <h1 className="text-4xl font-bold text-center text-blue-900 mb-4">Find Your Next Opportunity</h1>
+                <p className="text-center text-gray-600 mb-12">Browse through our available job openings and apply today.</p>
+
+                <div className="flex flex-col md:flex-row gap-4 mb-10 p-6 bg-white rounded-lg shadow-md">
+                    <select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} className="w-full p-3 border rounded-lg">
+                        <option value="">All Countries</option>
+                        {countries.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full p-3 border rounded-lg">
+                        <option value="">All Job Types</option>
+                        {types.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <button onClick={() => {setCountryFilter(''); setTypeFilter('');}} className="w-full md:w-auto bg-gray-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-700">Reset</button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {filteredJobs.length > 0 ? (
+                        filteredJobs.map(job => <JobCard key={job.id} job={job} navigate={navigate} />)
+                    ) : (
+                        <p className="text-center col-span-full text-gray-600">No jobs found matching your criteria.</p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ApplyPage = ({ initialState }) => {
+    const [formData, setFormData] = useState({
+        fullName: '',
+        email: '',
+        phone: '',
+        jobTitle: initialState?.jobTitle || '',
+        resume: null,
+        coverLetter: ''
+    });
+    const [isSubmitted, setIsSubmitted] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleChange = (e) => {
+        const { name, value, files } = e.target;
+        setFormData(prev => ({ ...prev, [name]: files ? files[0] : value }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!formData.resume) {
+            setError('Resume is required.');
+            return;
+        }
+        setIsLoading(true);
+        setError('');
+        
+        try {
+            const resumeRef = ref(storage, `resumes/${Date.now()}_${formData.resume.name}`);
+            await uploadBytes(resumeRef, formData.resume);
+            const resumeURL = await getDownloadURL(resumeRef);
+            await addDoc(collection(db, 'applications'), {
+                fullName: formData.fullName,
+                email: formData.email,
+                phone: formData.phone,
+                jobTitle: formData.jobTitle,
+                coverLetter: formData.coverLetter,
+                resumeURL: resumeURL,
+                submittedAt: new Date()
+            });
+            setIsSubmitted(true);
+        } catch (err) {
+            console.error("Error submitting application:", err);
+            setError('Something went wrong. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    if (isSubmitted) {
+        return (
+             <div className="py-20">
+                <div className="container mx-auto px-6 text-center max-w-2xl">
+                    <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-6 rounded-lg shadow-md" role="alert">
+                      <p className="font-bold text-2xl mb-2">Thank You!</p>
+                      <p className="text-lg">Your application has been submitted successfully. We will review your details and get back to you shortly.</p>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="py-20 bg-gray-50">
+            <div className="container mx-auto px-6 max-w-3xl">
+                <div className="bg-white p-8 md:p-12 rounded-2xl shadow-xl">
+                    <h1 className="text-3xl font-bold text-blue-900 mb-2 text-center">Application Form</h1>
+                    <p className="text-center text-gray-600 mb-8">Fill out the details below to apply.</p>
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <input type="text" name="fullName" placeholder="Full Name" onChange={handleChange} required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"/>
+                             <input type="email" name="email" placeholder="Email Address" onChange={handleChange} required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"/>
+                        </div>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <input type="tel" name="phone" placeholder="Phone Number" onChange={handleChange} required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"/>
+                            <input type="text" name="jobTitle" value={formData.jobTitle} placeholder="Job Title Applying For" onChange={handleChange} required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"/>
+                        </div>
+                        <div>
+                            <label className="block text-gray-700 mb-2 font-semibold">Upload Your Resume/CV (PDF, DOCX)</label>
+                            <input type="file" name="resume" required onChange={handleChange} accept=".pdf,.doc,.docx" className="w-full p-3 border rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-100 file:text-blue-800 hover:file:bg-blue-200"/>
+                        </div>
+                        <div>
+                           <textarea name="coverLetter" rows="4" placeholder="Briefly tell us about your skills and experience..." onChange={handleChange} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                        {error && <p className="text-red-500 text-sm">{error}</p>}
+                        <button type="submit" disabled={isLoading} className="w-full bg-gold-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-gold-600 transition duration-300 text-lg disabled:bg-gray-400">
+                           {isLoading ? 'Submitting...' : 'Submit Application'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+const TestimonialsPage = ({ siteContent, testimonials }) => ( <div className="py-20 bg-gray-50">
+        <div className="container mx-auto px-6">
+            <div className="text-center mb-16">
+                <h1 className="text-4xl font-bold text-blue-900">{siteContent.testimonials_title || "Success Stories"}</h1>
+                <p className="text-lg text-gray-600 mt-2">{siteContent.testimonials_subtitle || "Hear from candidates who found their dream jobs through us."}</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {testimonials.map((testimonial) => (
+                    <div key={testimonial.id} className="bg-white p-8 rounded-xl shadow-lg">
+                        <p className="text-gray-600 italic mb-6">"{testimonial.quote}"</p>
+                        <div className="flex items-center">
+                             <div className="w-12 h-12 rounded-full bg-blue-800 text-white flex items-center justify-center font-bold text-xl mr-4">
+                                {testimonial.name.charAt(0)}
+                            </div>
+                            <div>
+                                <p className="font-bold text-blue-900">{testimonial.name}</p>
+                                <p className="text-sm text-gray-500">Placed in {testimonial.country}</p>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>);
+
+const ContactPage = ({ siteContent }) => ( <div className="py-20">
+        <div className="container mx-auto px-6">
+             <div className="text-center mb-16">
+                <h1 className="text-4xl font-bold text-blue-900">{siteContent.contact_title || "Get In Touch"}</h1>
+                <p className="text-lg text-gray-600 mt-2">{siteContent.contact_subtitle || "We'd love to hear from you. Contact us for any inquiries."}</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 bg-white p-8 rounded-lg shadow-xl">
+                 <div>
+                    <h2 className="text-2xl font-bold text-blue-800 mb-6">Contact Form</h2>
+                    <form className="space-y-4">
+                         <input type="text" placeholder="Your Name" className="w-full p-3 border rounded-lg" />
+                         <input type="email" placeholder="Your Email" className="w-full p-3 border rounded-lg" />
+                         <textarea rows="5" placeholder="Your Message" className="w-full p-3 border rounded-lg"></textarea>
+                         <button type="submit" className="bg-gold-500 text-white font-bold py-3 px-8 rounded-lg hover:bg-gold-600">Send Message</button>
+                    </form>
+                 </div>
+                 <div className="space-y-6">
+                     <h2 className="text-2xl font-bold text-blue-800">Our Office</h2>
+                     <p className="flex items-start text-gray-700">
+                        <MapPin className="w-6 h-6 mr-3 text-blue-700 mt-1"/> 
+                        <span>{siteContent.contact_address || "123 Career Street, Connaught Place, New Delhi, 110001, India"}</span>
+                     </p>
+                      <p className="flex items-center text-gray-700">
+                        <Phone className="w-6 h-6 mr-3 text-blue-700"/> 
+                        <span>{siteContent.contact_phone || "+91 12345 67890"}</span>
+                     </p>
+                      <p className="flex items-center text-gray-700">
+                        <Mail className="w-6 h-6 mr-3 text-blue-700"/> 
+                        <span>{siteContent.contact_email || "contact@globalcareers.com"}</span>
+                     </p>
+                     <div className="h-64 bg-gray-200 rounded-lg flex items-center justify-center text-gray-500">
+                        Google Map Placeholder
+                     </div>
+                 </div>
+            </div>
+        </div>
+     </div>);
+
+const LoginPage = ({ navigate }) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setError('');
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+            navigate('admin');
+        } catch (error) {
+            setError('Failed to login. Please check your credentials.');
+            console.error("Login Error:", error);
+        }
+    };
+    
+    return (
+        <div className="py-20 flex justify-center items-center bg-gray-50">
+            <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-lg">
+                <h1 className="text-2xl font-bold text-center text-blue-900 mb-6">Admin Login</h1>
+                <form onSubmit={handleLogin} className="space-y-4">
+                    <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full p-3 border rounded-lg"/>
+                    <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full p-3 border rounded-lg"/>
+                    {error && <p className="text-red-500 text-sm">{error}</p>}
+                    <button type="submit" className="w-full bg-blue-800 text-white font-bold py-3 rounded-lg hover:bg-blue-900">Login</button>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+const AdminPage = ({ navigate, jobs, fetchJobs, siteContent, fetchSiteContent, testimonials, fetchTestimonials }) => {
+    const [applications, setApplications] = useState([]);
+    const [view, setView] = useState('jobs');
+    const [jobForm, setJobForm] = useState({ title: '', country: '', salary: '', type: '', description: '' });
+    const [isEditing, setIsEditing] = useState(null);
+    const [editableContent, setEditableContent] = useState(siteContent);
+    const [testimonialForm, setTestimonialForm] = useState({ name: '', country: '', quote: ''});
+
+    useEffect(() => {
+        setEditableContent(siteContent);
+    }, [siteContent]);
+
+    const fetchApplications = async () => {
+        const querySnapshot = await getDocs(collection(db, "applications"));
+        const appsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setApplications(appsList);
+    };
+
+    useEffect(() => {
+        if (view === 'applications') {
+            fetchApplications();
+        }
+    }, [view]);
+    
+    const handleContentChange = (e) => setEditableContent({ ...editableContent, [e.target.name]: e.target.value });
+    
+    const handleContentSave = async () => {
+        const contentRef = doc(db, "siteContent", "main");
+        await setDoc(contentRef, editableContent, { merge: true });
+        alert("Site content updated successfully!");
+        fetchSiteContent();
+    };
+
+    const handleJobFormChange = (e) => setJobForm({ ...jobForm, [e.target.name]: e.target.value });
+    
+    const handleJobSubmit = async (e) => {
+        e.preventDefault();
+        if(isEditing) {
+            await updateDoc(doc(db, "jobs", isEditing), jobForm);
+        } else {
+            await addDoc(collection(db, "jobs"), jobForm);
+        }
+        setJobForm({ title: '', country: '', salary: '', type: '', description: '' });
+        setIsEditing(null);
+        fetchJobs();
+    };
+    
+    const handleEditJob = (job) => {
+        setIsEditing(job.id);
+        setJobForm({ title: job.title, country: job.country, salary: job.salary, type: job.type, description: job.description });
+    };
+
+    const handleDeleteJob = async (id) => {
+        if (window.confirm("Are you sure you want to delete this job?")) {
+            await deleteDoc(doc(db, "jobs", id));
+            fetchJobs();
+        }
+    };
+
+    const handleTestimonialFormChange = (e) => setTestimonialForm({ ...testimonialForm, [e.target.name]: e.target.value });
+
+    const handleTestimonialSubmit = async (e) => {
+        e.preventDefault();
+        await addDoc(collection(db, "testimonials"), testimonialForm);
+        setTestimonialForm({ name: '', country: '', quote: ''});
+        fetchTestimonials();
+    };
+
+    const handleDeleteTestimonial = async (id) => {
+        if(window.confirm("Are you sure you want to delete this testimonial?")) {
+            await deleteDoc(doc(db, "testimonials", id));
+            fetchTestimonials();
+        }
+    };
+    
+    const handleLogout = async () => {
+        await signOut(auth);
+        navigate('home');
+    }
+
+    return (
+        <div className="py-12 bg-gray-50">
+            <div className="container mx-auto px-6">
+                <div className="flex justify-between items-center mb-8">
+                    <h1 className="text-3xl font-bold text-blue-900">Admin Dashboard</h1>
+                    <button onClick={handleLogout} className="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">Logout</button>
+                </div>
+
+                <div className="flex space-x-4 mb-8 border-b">
+                    <button onClick={() => setView('jobs')} className={`py-2 px-4 ${view === 'jobs' ? 'border-b-2 border-blue-800 font-semibold' : ''}`}>Manage Jobs</button>
+                    <button onClick={() => setView('testimonials')} className={`py-2 px-4 ${view === 'testimonials' ? 'border-b-2 border-blue-800 font-semibold' : ''}`}>Manage Testimonials</button>
+                    <button onClick={() => setView('applications')} className={`py-2 px-4 ${view === 'applications' ? 'border-b-2 border-blue-800 font-semibold' : ''}`}>View Applications</button>
+                    <button onClick={() => setView('content')} className={`py-2 px-4 ${view === 'content' ? 'border-b-2 border-blue-800 font-semibold' : ''}`}>Edit Site Content</button>
+                </div>
+                
+                {view === 'content' && (
+                    <div className="bg-white p-6 rounded-lg shadow-md">
+                        <h2 className="text-2xl font-semibold mb-4">Edit Website Text</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="font-bold">Company Name</label>
+                                <input name="companyName" value={editableContent.companyName || ''} onChange={handleContentChange} className="w-full p-2 border rounded mt-1"/>
+                            </div>
+                            <div>
+                                <label className="font-bold">Home Page Headline</label>
+                                <input name="home_headline" value={editableContent.home_headline || ''} onChange={handleContentChange} className="w-full p-2 border rounded mt-1"/>
+                            </div>
+                             <div className="md:col-span-2">
+                                <label className="font-bold">Home Page Sub-Headline</label>
+                                <textarea name="home_subheadline" value={editableContent.home_subheadline || ''} onChange={handleContentChange} className="w-full p-2 border rounded mt-1" rows="3"></textarea>
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="font-bold">About Us Mission</label>
+                                <textarea name="about_mission" value={editableContent.about_mission || ''} onChange={handleContentChange} className="w-full p-2 border rounded mt-1" rows="4"></textarea>
+                            </div>
+                            <div>
+                                <label className="font-bold">Contact Phone</label>
+                                <input name="contact_phone" value={editableContent.contact_phone || ''} onChange={handleContentChange} className="w-full p-2 border rounded mt-1"/>
+                            </div>
+                             <div>
+                                <label className="font-bold">Contact Address</label>
+                                <input name="contact_address" value={editableContent.contact_address || ''} onChange={handleContentChange} className="w-full p-2 border rounded mt-1"/>
+                            </div>
+                        </div>
+                        <button onClick={handleContentSave} className="mt-6 bg-green-600 text-white py-2 px-6 rounded-lg hover:bg-green-700">Save All Changes</button>
+                    </div>
+                )}
+
+                {view === 'jobs' && ( <div>
+                    <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+                        <h2 className="text-2xl font-semibold mb-4">{isEditing ? 'Edit Job' : 'Add New Job'}</h2>
+                        <form onSubmit={handleJobSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input name="title" value={jobForm.title} onChange={handleJobFormChange} placeholder="Job Title" className="p-2 border rounded" required />
+                            <input name="country" value={jobForm.country} onChange={handleJobFormChange} placeholder="Country" className="p-2 border rounded" required />
+                            <input name="salary" value={jobForm.salary} onChange={handleJobFormChange} placeholder="Salary" className="p-2 border rounded" required />
+                            <input name="type" value={jobForm.type} onChange={handleJobFormChange} placeholder="Job Type (e.g., Healthcare)" className="p-2 border rounded" required />
+                            <textarea name="description" value={jobForm.description} onChange={handleJobFormChange} placeholder="Description" className="p-2 border rounded md:col-span-2" rows="3" required></textarea>
+                            <div className="md:col-span-2 flex justify-end space-x-2">
+                                {isEditing && <button type="button" onClick={() => {setIsEditing(null); setJobForm({ title: '', country: '', salary: '', type: '', description: '' })}} className="bg-gray-500 text-white py-2 px-4 rounded-lg">Cancel Edit</button>}
+                                <button type="submit" className="bg-green-600 text-white py-2 px-4 rounded-lg">{isEditing ? 'Update Job' : 'Add Job'}</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-lg shadow-md">
+                        <h2 className="text-2xl font-semibold mb-4">Current Job Listings</h2>
+                        <div className="space-y-4">
+                            {jobs.map(job => (
+                                <div key={job.id} className="p-4 border rounded-lg flex justify-between items-center">
+                                    <div>
+                                        <p className="font-bold">{job.title} - {job.country}</p>
+                                        <p className="text-sm text-gray-600">{job.type}</p>
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        <button onClick={() => handleEditJob(job)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
+                                        <button onClick={() => handleDeleteJob(job.id)} className="p-2 text-red-600 hover:text-red-800"><Trash2 size={20}/></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>)}
+
+                {view === 'testimonials' && ( <div>
+                    <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+                        <h2 className="text-2xl font-semibold mb-4">Add New Testimonial</h2>
+                        <form onSubmit={handleTestimonialSubmit} className="space-y-4">
+                            <input name="name" value={testimonialForm.name} onChange={handleTestimonialFormChange} placeholder="Candidate Name" className="w-full p-2 border rounded" required />
+                            <input name="country" value={testimonialForm.country} onChange={handleTestimonialFormChange} placeholder="Country Placed" className="w-full p-2 border rounded" required />
+                            <textarea name="quote" value={testimonialForm.quote} onChange={handleTestimonialFormChange} placeholder="Testimonial Quote" className="w-full p-2 border rounded" rows="4" required></textarea>
+                            <div className="flex justify-end">
+                                <button type="submit" className="bg-green-600 text-white py-2 px-4 rounded-lg">Add Testimonial</button>
+                            </div>
+                        </form>
+                    </div>
+                     <div className="bg-white p-6 rounded-lg shadow-md">
+                        <h2 className="text-2xl font-semibold mb-4">Manage Testimonials</h2>
+                        <div className="space-y-4">
+                            {testimonials.map(t => (
+                                <div key={t.id} className="p-4 border rounded-lg flex justify-between items-start">
+                                    <div>
+                                        <p className="font-bold">{t.name} - {t.country}</p>
+                                        <p className="text-sm text-gray-600 italic">"{t.quote}"</p>
+                                    </div>
+                                    <button onClick={() => handleDeleteTestimonial(t.id)} className="p-2 text-red-600 hover:text-red-800 flex-shrink-0"><Trash2 size={20}/></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>)}
+                
+                {view === 'applications' && (
+                     <div className="bg-white p-6 rounded-lg shadow-md">
+                        <h2 className="text-2xl font-semibold mb-4">Received Applications</h2>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="bg-gray-100">
+                                        <th className="p-3">Name</th>
+                                        <th className="p-3">Email</th>
+                                        <th className="p-3">Applying for</th>
+                                        <th className="p-3">Resume</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {applications.map(app => (
+                                        <tr key={app.id} className="border-b">
+                                            <td className="p-3">{app.fullName}</td>
+                                            <td className="p-3">{app.email}</td>
+                                            <td className="p-3">{app.jobTitle}</td>
+                                            <td className="p-3"><a href={app.resumeURL} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View Resume</a></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
+// --- Main App Component ---
+export default function App() {
+    const [page, setPage] = useState('home');
+    const [pageState, setPageState] = useState(null);
+    const [jobs, setJobs] = useState([]);
+    const [user, setUser] = useState(null);
+    const [siteContent, setSiteContent] = useState({});
+    const [testimonials, setTestimonials] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const fetchSiteContent = async () => {
+        const contentRef = doc(db, "siteContent", "main");
+        const docSnap = await getDoc(contentRef);
+        if (docSnap.exists()) {
+            setSiteContent(docSnap.data());
+        } else {
+            console.log("No siteContent document! A default one will be created on first save in admin panel.");
+        }
+    };
+    
+    const fetchJobs = async () => {
+        const querySnapshot = await getDocs(collection(db, "jobs"));
+        const jobsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setJobs(jobsList);
+    };
+
+    const fetchTestimonials = async () => {
+        const querySnapshot = await getDocs(collection(db, "testimonials"));
+        const testimonialsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setTestimonials(testimonialsList);
+    };
+
+    useEffect(() => {
+        const tailwindScript = document.createElement('script');
+        tailwindScript.src = 'https://cdn.tailwindcss.com';
+        document.head.appendChild(tailwindScript);
+        
+        const configScript = document.createElement('script');
+        configScript.innerHTML = `
+            tailwind.config = {
+                theme: { extend: { colors: { gold: { 400: '#FBBF24', 500: '#F59E0B', 600: '#D97706' } } } }
+            }
+        `;
+        document.head.appendChild(configScript);
+
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            setUser(currentUser);
+            try {
+                // Wait for auth to be resolved before fetching data
+                if(currentUser !== null) { // User is logged in or anonymous session established
+                    await Promise.all([fetchJobs(), fetchSiteContent(), fetchTestimonials()]);
+                }
+            } catch (err) {
+                console.error("Firebase data fetching failed:", err);
+                setError("Failed to connect to the database. Please ensure your Firebase configuration is correct and you are online.");
+            } finally {
+                setIsLoading(false);
+            }
+        });
+
+        // Initial sign-in attempt if no user is detected after a short delay
+        setTimeout(() => {
+            if (auth.currentUser === null) {
+                signInAnonymously(auth).catch(err => {
+                    console.error("Anonymous sign-in failed:", err);
+                    setError("Could not establish a secure connection to the database.");
+                    setIsLoading(false);
+                });
+            }
+        }, 1500);
+
+
+        return () => {
+            unsubscribe();
+            document.head.removeChild(tailwindScript);
+            document.head.removeChild(configScript);
+        };
+    }, []);
+    
+    const navigate = (newPage, state = null) => {
+        if (newPage === 'admin' && !user) {
+            setPage('login');
+        } else {
+            setPage(newPage);
+        }
+        setPageState(state);
+        window.scrollTo(0, 0);
+    };
+
+    const renderPage = () => {
+        switch (page) {
+            case 'home': return <HomePage navigate={navigate} jobs={jobs} siteContent={siteContent}/>;
+            case 'about': return <AboutUsPage siteContent={siteContent}/>;
+            case 'services': return <ServicesPage />;
+            case 'jobs': return <JobsPage navigate={navigate} jobs={jobs} allJobs={jobs} />;
+            case 'apply': return <ApplyPage initialState={pageState} />;
+            case 'testimonials': return <TestimonialsPage siteContent={siteContent} testimonials={testimonials} />;
+            case 'contact': return <ContactPage siteContent={siteContent} />;
+            case 'login': return <LoginPage navigate={navigate} />;
+            case 'admin': return user ? <AdminPage navigate={navigate} jobs={jobs} fetchJobs={fetchJobs} siteContent={siteContent} fetchSiteContent={fetchSiteContent} testimonials={testimonials} fetchTestimonials={fetchTestimonials} /> : <LoginPage navigate={navigate} />;
+            default: return <HomePage navigate={navigate} jobs={jobs} siteContent={siteContent} />;
+        }
+    };
+
+    if (isLoading) {
+        return <LoadingScreen />;
+    }
+
+    if (error) {
+        return <ErrorScreen message={error} />;
+    }
+
+    return (
+        <div className="bg-white font-sans">
+            <Header navigate={navigate} user={user} siteContent={siteContent} />
+            <main>
+                {renderPage()}
+            </main>
+            <Footer siteContent={siteContent} />
+        </div>
+    );
+}
+
